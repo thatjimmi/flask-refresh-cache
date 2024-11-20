@@ -18,20 +18,28 @@ pip install flask apscheduler
 ## Example Usage
 
 ```python
+import time
 from flask import Flask
-from some_cache_library import Cache # Replace with an actual cache implementation
+from flask_caching import Cache
+from cache_manager import CacheManager
 
-app = Flask(**name**)
-cache = Cache() # Initialize with a cache backend (e.g., Redis or MemoryCache)
+app = Flask(__name__)
+app.config['CACHE_TYPE'] = 'SimpleCache'
+cache = Cache()
+cache.init_app(app)
 cache_manager = CacheManager(app, cache)
 
-@app.route('/some-resource')
-@cache_manager.cacher(timeout=3600, refresh_margin=300)
-def some_resource(): # Simulate an expensive operation (e.g., database query)
-return {"data": "fresh data"}
+def compute_delta_positions():
+    time.sleep(10) # SLOW COMPUTATION
+    return f"Delta Positions at {time.strftime('%Y-%m-%d %H:%M:%S')}"
 
-if **name** == '**main**':
-app.run(debug=True)
+@app.route('/delta_positions')
+@cache_manager.cacher(timeout=20, refresh_margin=10)
+def delta_positions():
+    return compute_delta_positions()
+
+# Schedule periodic refresh
+cache_manager.schedule_periodic_refresh('/delta_positions', interval=10 compute_func=compute_delta_positions)
 ```
 
 In the example above, the route /some-resource is cached for 1 hour (timeout=3600 seconds) and will begin refreshing 5 minutes before expiration (refresh_margin=300 seconds).
