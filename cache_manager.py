@@ -24,7 +24,6 @@ class CacheManager:
         route = request.path  
         args = request.args
         if args:
-            # Append sorted query parameters for uniqueness
             query_string = '&'.join(f'{k}={v}' for k, v in sorted(args.items()))
             return f'{route}?{query_string}'
         return route
@@ -51,7 +50,6 @@ class CacheManager:
                 return value['data']
             else:
                 print(f'Cache stale for key: {key}')
-                # Check and set refreshing flag in the cache
                 refreshing_key = f"{key}_refreshing"
                 if not self.cache.get(refreshing_key):
                     self.cache.set(refreshing_key, True, timeout=refresh_margin)
@@ -72,12 +70,11 @@ class CacheManager:
             compute_func (Callable): Function to compute fresh data.
             refreshing_key (str, optional): Temporary flag key for ongoing refresh.
         """
-        # print (f'Updating cache for key: {key}') and time of now
         precomputed_value = compute_func()
         self.cache.set(key, {'data': precomputed_value, 'timestamp': time.time()})
         print(f'Updated cache for key: {key} at {time.strftime("%Y-%m-%d %H:%M:%S")}')
         if refreshing_key:
-            self.cache.delete(refreshing_key)  # Clear the refreshing flag
+            self.cache.delete(refreshing_key) 
 
     def schedule_periodic_refresh(self, key, interval, compute_func):
         """
@@ -110,8 +107,7 @@ class CacheManager:
         """
         def decorator(func):
             @wraps(func)
-            def wrapped(*args, **kwargs):
-                # Use compute_func if provided, otherwise fall back to the original function
+            def wrapped(*args, **kwargs):            
                 nonlocal compute_func
                 compute_func = compute_func or (lambda: func(*args, **kwargs))
                 return self.stale_while_revalidate(timeout, refresh_margin, compute_func)
