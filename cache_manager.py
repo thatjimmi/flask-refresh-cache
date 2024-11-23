@@ -11,9 +11,8 @@ class CacheManager:
         self.cache = cache
         self.executor = executor or ThreadPoolExecutor()
         self.scheduler = BackgroundScheduler()
-
         self.scheduler.start()
-
+        atexit.register(lambda: self.executor.shutdown(wait=False))
         atexit.register(lambda: self.scheduler.shutdown())
         
 
@@ -23,8 +22,8 @@ class CacheManager:
         """
         route = request.path  
         args = request.args
-        if args:
-            query_string = '&'.join(f'{k}={v}' for k, v in sorted(args.items()))
+        query_string = '&'.join([f'{k}={v}' for k, v in args.items()])
+        if query_string:
             return f'{route}?{query_string}'
         return route
 
@@ -70,11 +69,12 @@ class CacheManager:
             compute_func (Callable): Function to compute fresh data.
             refreshing_key (str, optional): Temporary flag key for ongoing refresh.
         """
-        precomputed_value = compute_func()
-        self.cache.set(key, {'data': precomputed_value, 'timestamp': time.time()})
-        print(f'Updated cache for key: {key} at {time.strftime("%Y-%m-%d %H:%M:%S")}')
-        if refreshing_key:
-            self.cache.delete(refreshing_key) 
+        with self.app.app_context():
+            precomputed_value = compute_func()
+            self.cache.set(key, {'data': precomputed_value, 'timestamp': time.time()})
+            print(f'Updated cache for key: {key} at {time.strftime("%Y-%m-%d %H:%M:%S")}')
+            if refreshing_key:
+                self.cache.delete(refreshing_key) 
 
     def schedule_periodic_refresh(self, key, interval, compute_func):
         """
