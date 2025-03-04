@@ -22,15 +22,15 @@ def compute_trade_summary():
     return f"Trade Summary at {time.strftime('%Y-%m-%d %H:%M:%S')}"
 
 # Flask routes
-# @app.route('/delta_positions')
-# @cache_manager.cacher(timeout=20, refresh_margin=10)
-# def delta_positions():
-#     return compute_delta_positions()
+@app.route('/delta_positions')
+@cache_manager.cacher(timeout=20, refresh_margin=10)
+def delta_positions():
+    return compute_delta_positions()
 
-# @app.route('/trade_summary')
-# @cache_manager.cacher(timeout=10, refresh_margin=0)
-# def trade_summary():
-#     return compute_trade_summary()
+@app.route('/trade_summary')
+@cache_manager.cacher(timeout=10, refresh_margin=0)
+def trade_summary():
+    return compute_trade_summary()
 
 @app.route('/product_betas')
 @cache_manager.cacher(timeout=0, refresh_margin=0)
@@ -38,4 +38,4 @@ def product_betas():
     return compute_product_betas()
 
 # Schedule periodic refresh
-# cache_manager.schedule_periodic_refresh('/trade_summary', interval=10, compute_func=compute_trade_summary)  
+cache_manager.schedule_periodic_refresh('/trade_summary', interval=10, compute_func=compute_trade_summary)  
