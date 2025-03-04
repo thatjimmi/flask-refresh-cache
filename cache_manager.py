@@ -3,7 +3,7 @@ import atexit
 from functools import wraps
 from concurrent.futures import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
-from flask import request
+from flask import request, jsonify
 
 class CacheManager:
     def __init__(self, app, cache, executor=None):
@@ -21,7 +21,12 @@ class CacheManager:
         Automatically generate a cache key based on the current route and request arguments.
         """
         route = request.path  
-        args = request.args
+        args = request.args.copy()
+        
+        # Remove force_refresh parameter from the cache key generation
+        if 'force_refresh' in args:
+            args.pop('force_refresh')
+            
         query_string = '&'.join([f'{k}={v}' for k, v in args.items()])
         if query_string:
             return f'{route}?{query_string}'
@@ -32,7 +37,6 @@ class CacheManager:
         Implements stale-while-revalidate logic for caching.
 
         Args:
-            key (str): Cache key.
             timeout (int): Cache expiration time (in seconds).
             refresh_margin (int): Time to refresh the cache before it expires (in seconds).
             compute_func (Callable): Function to compute fresh data.
@@ -41,6 +45,24 @@ class CacheManager:
             Any: Cached or computed data.
         """
         key = self._generate_key()
+        
+        # Check if force_refresh is in the request parameters
+        force_refresh = request.args.get('force_refresh', '').lower() in ('true', '1', 'yes')
+        
+        # Handle the force refresh scenario
+        if force_refresh:
+            print(f'Force refresh requested for key: {key}')
+            refreshing_key = f"{key}_refreshing"
+            
+            # Only trigger a refresh if not already refreshing
+            if not self.cache.get(refreshing_key):
+                self.cache.set(refreshing_key, True, timeout=refresh_margin)
+                self.executor.submit(self.update_cache, key, compute_func, refreshing_key)
+                
+            # Just return a success message for force refresh requests
+            return {'status': 'OK', 'message': 'Cache refresh triggered in background'}
+            
+        # Normal caching flow
         value = self.cache.get(key)
         if value is not None:
             last_update = value.get('timestamp', 0)
@@ -97,7 +119,6 @@ class CacheManager:
         Decorator for caching Flask routes or functions with stale-while-revalidate.
 
         Args:
-            key (str): Cache key.
             timeout (int): Cache expiration time (in seconds).
             refresh_margin (int): Time to refresh the cache before it expires (in seconds).
             compute_func (Callable, optional): Function to compute fresh data. Defaults to None.
@@ -110,6 +131,13 @@ class CacheManager:
             def wrapped(*args, **kwargs):            
                 nonlocal compute_func
                 compute_func = compute_func or (lambda: func(*args, **kwargs))
-                return self.stale_while_revalidate(timeout, refresh_margin, compute_func)
+                result = self.stale_while_revalidate(timeout, refresh_margin, compute_func)
+                
+                # If it's a force refresh request, wrap the result in a proper response
+                if request.args.get('force_refresh', '').lower() in ('true', '1', 'yes'):
+                    if isinstance(result, dict) and 'status' in result and result['status'] == 'OK':
+                        return jsonify(result)                
+                        
+                return result
             return wrapped
         return decorator
